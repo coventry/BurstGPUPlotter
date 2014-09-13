@@ -7,6 +7,8 @@
 	Based on the code of the official miner and dcct's plotgen.
 */
 
+#include <future>
+#include <assert.h>
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -53,12 +55,27 @@ void CommandGenerate::help() const {
 	std::cerr << "    - hashesNumber: Number of hashes to compute for each step2 kernel calls." << std::endl;
 }
 
+void save_nonces(unsigned int nonceSize, std::ofstream *out, unsigned char *bufferCpu) {
+  for(unsigned long int offset = 0 ; offset < nonceSize ; offset += OUT_CAP) {
+    assert(out->good());
+    unsigned long int size = nonceSize - offset;
+    if(size > OUT_CAP) {
+      size = OUT_CAP;
+    }
+    out->write((const char*)(bufferCpu + offset), size);
+    out->flush();
+  }
+}
+
 int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 	if(p_args.size() < 10) {
 		help();
 		return -1;
 	}
 
+	bool saving_thread = false;
+	std::future <void> save_thread;
+	std::ofstream *out;
 	unsigned int platformId = atol(p_args[1].c_str());
 	unsigned int deviceId = atol(p_args[2].c_str());
 	std::string path(p_args[3]);
@@ -69,6 +86,11 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 	unsigned int threadsNumber = atol(p_args[8].c_str());
 	unsigned int hashesNumber = atol(p_args[9].c_str());
 
+	std::ostringstream outFile;
+	outFile << path << "/" << address << "_" << startNonce << "_" << noncesNumber << "_" << staggerSize;
+	out = new std::ofstream(outFile.str(), std::ios::out | std::ios::binary | std::ios::trunc);
+	assert(out);
+	
 	if(noncesNumber % staggerSize != 0) {
 		noncesNumber -= noncesNumber % staggerSize;
 		noncesNumber += staggerSize;
@@ -217,10 +239,6 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 			throw OpenclError(error, "Unable to set the OpenCL kernel arguments");
 		}
 
-		std::ostringstream outFile;
-		outFile << path << "/" << address << "_" << startNonce << "_" << noncesNumber << "_" << staggerSize;
-
-		std::ofstream out(outFile.str(), std::ios::out | std::ios::binary | std::ios::trunc);
 		size_t globalWorkSize = staggerSize;
 		size_t localWorkSize = (staggerSize < threadsNumber) ? staggerSize : threadsNumber;
 		time_t startTime = time(0);
@@ -269,22 +287,17 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 				throw OpenclError(error, "Error in step3 kernel launch");
 			}
 
+			if (saving_thread) {
+			  save_thread.wait(); // Wait for last job to finish
+			  saving_thread = false;
+			}
+
 			error = clEnqueueReadBuffer(commandQueue, bufferGpuScoops, CL_TRUE, 0, sizeof(cl_uchar) * nonceSize, bufferCpu, 0, 0, 0);
 			if(error != CL_SUCCESS) {
-				throw OpenclError(error, "Error in synchronous read");
+			  throw OpenclError(error, "Error in synchronous read");
 			}
-
-			std::cout << "Done calculating for nonce start" << nonce << ", now writing to disk" << std::endl;
-
-			for(unsigned int offset = 0 ; offset < nonceSize ; offset += OUT_CAP) {
-				unsigned int size = nonceSize - offset;
-				if(size > OUT_CAP) {
-					size = OUT_CAP;
-				}
-				std::cout << "Writing " << size << " to disk." << std::endl;
-				out.write((const char*)(bufferCpu + offset), size);
-				// std::cout.write((const char*)(bufferCpu + offset), size);
-			}
+			saving_thread = true;
+			save_thread = std::async(save_nonces, nonceSize, out, bufferCpu);
 		}
 
 		time_t currentTime = time(0);
@@ -302,6 +315,13 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		returnCode = -1;
 	}
 
+	if (saving_thread) {
+	  std::cerr << "waiting for final save to finish" << std::endl;
+	  save_thread.wait();
+	  saving_thread = false;
+	  std::cerr << "done waiting for final save" << std::endl;
+	}
+
 	if(kernelStep3) { clReleaseKernel(kernelStep3); }
 	if(kernelStep2) { clReleaseKernel(kernelStep2); }
 	if(kernelStep1) { clReleaseKernel(kernelStep1); }
@@ -311,7 +331,7 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 	if(bufferCpu) { delete[] bufferCpu; }
 	if(commandQueue) { clReleaseCommandQueue(commandQueue); }
 	if(context) { clReleaseContext(context); }
-
+	delete out;
 	return returnCode;
 }
 

@@ -1,7 +1,7 @@
 all: clean gpuPlotGenerator 
 
 gpuPlotGenerator: 
-	g++ -ansi -pedantic -W -Wall -std=c++0x *.cpp -lOpenCL -o gpuPlotGenerator
+	g++ -pthread -ansi -pedantic -W -Wall -std=c++0x *.cpp -lOpenCL -o gpuPlotGenerator
 
 clean:
 	rm -f gpuPlotGenerator
