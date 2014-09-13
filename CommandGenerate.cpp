@@ -63,8 +63,8 @@ void CommandGenerate::help() const {
 }
 
 void save_nonces(unsigned int nonceSize, std::ofstream *out, unsigned char *bufferCpu) {
+  assert(out->good());
   for(unsigned long int offset = 0 ; offset < nonceSize ; offset += OUT_CAP) {
-    assert(out->good());
     unsigned long int size = nonceSize - offset;
     if(size > OUT_CAP) {
       size = OUT_CAP;
