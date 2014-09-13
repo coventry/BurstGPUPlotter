@@ -57,7 +57,7 @@ void CommandGenerate::help() const {
 	std::cerr << "    - startNonce: First nonce of the plot generation." << std::endl;
 	std::cerr << "    - noncesNumber: Number of nonces to generate." << std::endl;
 	std::cerr << "With multiple [<path> <address> <startNonce> <noncesNumber>] arguments " << std::endl;
-	std::cerr << "GPU calculation iterates through a stagger for each job the results are " << std::endl;
+	std::cerr << "GPU calculation iterates through a stagger for each job and the results are " << std::endl;
 	std::cerr << "saved asynchronously.  This is intended to be used for plotting multiple " << std::endl;
 	std::cerr << "mechanical drives simultaneously in order to max out GPU bandwidth." << std::endl;
 }
