@@ -54,7 +54,7 @@ int CommandList::execute(const std::vector<std::string>& p_args) {
 int CommandList::listPlatforms(const std::vector<std::string>& p_args) {
 	cl_platform_id platforms[4];
 	cl_uint platformsNumber;
-
+	(void)p_args; // Shut compiler up about unused parameter
 	try {
 		int error;
 
