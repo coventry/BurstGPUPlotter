@@ -80,66 +80,84 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		return -1;
 	}
 
-	bool saving_thread = false;
-	std::future <void> save_thread;
-	std::ofstream *out;
 	unsigned int platformId = atol(p_args[1].c_str());
 	unsigned int deviceId = atol(p_args[2].c_str());
 	unsigned int staggerSize = atol(p_args[3].c_str());
 	unsigned int threadsNumber = atol(p_args[4].c_str());
 	unsigned int hashesNumber = atol(p_args[5].c_str());
+	unsigned int nonceSize = PLOT_SIZE * staggerSize;
 
-	unsigned int numbjobs = (p_args.size() - 5)/4;
-	std::vector<std::string> paths(numbjobs);
-	std::vector<unsigned long long> addresses(numbjobs);
-	std::vector<unsigned long long> startNonce(numbjobs);
-	std::vector<unsigned int> noncesNumber(numbjobs);
-	for (i = 0; i < numbjobs; i++) {
-	  int argstart = 5 + i*4;
-	  paths[i] = std::string(p_args[argstart]);
-	  addresses[i] = strtoull(p_args[argstart+1], NULL, 10);
-	  startNonce[i] = strtoull(p_args[argstart+2], NULL, 10);
-	  noncesNumber[i] = atol(p_args[argstart+3]);
-	}
-
-	std::ostringstream outFile;
-	outFile << path << "/" << address << "_" << startNonce << "_" << noncesNumber << "_" << staggerSize;
-	out = new std::ofstream(outFile.str(), std::ios::out | std::ios::binary | std::ios::trunc);
-	assert(out);
-	
-	if(noncesNumber % staggerSize != 0) {
-		noncesNumber -= noncesNumber % staggerSize;
-		noncesNumber += staggerSize;
-	}
-
-	unsigned long long nonce = startNonce;
-	unsigned long long endNonce = startNonce + noncesNumber;
-	unsigned int noncesGbSize = noncesNumber / 4 / 1024;
-	unsigned int staggerMbSize = staggerSize / 4;
-	std::cerr << "Path: " << path << std::endl;
-	std::cerr << "Nonces: " << startNonce << " to " << endNonce << " (" << noncesGbSize << " GB)" << std::endl;
-	std::cerr << "Process memory: " << staggerMbSize << "MB" << std::endl;
 	std::cerr << "Threads number: " << threadsNumber << std::endl;
 	std::cerr << "Hashes number: " << hashesNumber << std::endl;
-	std::cerr << "----" << std::endl;
 
-	cl_platform_id platforms[4];
-	cl_uint platformsNumber;
-	cl_device_id devices[32];
-	cl_uint devicesNumber;
-	cl_context context = 0;
-	cl_command_queue commandQueue = 0;
-	unsigned char* bufferCpu = 0;
-	cl_mem bufferGpuGen = 0;
-	cl_mem bufferGpuScoops = 0;
-	cl_program program = 0;
-	cl_kernel kernelStep1 = 0;
-	cl_kernel kernelStep2 = 0;
-	cl_kernel kernelStep3 = 0;
+	unsigned int numjobs = (p_args.size() - 5)/4;
+	std::cerr << numjobs << " plot(s) to do." << std::endl;
+	unsigned int staggerMbSize = staggerSize / 4;
+	std::cerr << "Non-GPU memory usage: " << staggerMbSize*numjobs << "MB" << std::endl;
+	
+	std::vector<std::string> paths(numjobs);
+	std::vector<std::ofstream *> out_files(numjobs);
+	std::vector<unsigned long long> addresses(numjobs);
+	std::vector<unsigned long long> startNonces(numjobs);
+	std::vector<unsigned long long> endNonces(numjobs);
+	std::vector<unsigned int> noncesNumbers(numjobs);
+	std::vector<unsigned char*> buffersCpu(numjobs);
+	std::vector<bool> saving_thread_flags(numjobs);
+	std::vector<std::future<void>> save_threads(numjobs);
+	unsigned long long maxNonceNumber = 0;
+	unsigned long long totalNonces = 0;
 
 	int returnCode = 0;
 
 	try {
+		for (unsigned int i = 0; i < numjobs; i++) {
+			std::cerr << "Job number " << i << std::endl;
+			unsigned int argstart = 5 + i*4;
+			paths[i] = std::string(p_args[argstart]);
+			addresses[i] = strtoull(p_args[argstart+1].c_str(), NULL, 10);
+			startNonces[i] = strtoull(p_args[argstart+2].c_str(), NULL, 10);
+			noncesNumbers[i] = atol(p_args[argstart+3].c_str());
+			maxNonceNumber = std::max(maxNonceNumber, (long long unsigned int)noncesNumbers[i]);
+			totalNonces += noncesNumbers[i];
+
+			std::ostringstream outFile;
+			outFile << paths[i] << "/" << addresses[i] << "_" << startNonces[i] << "_" << \
+				noncesNumbers[i] << "_" << staggerSize;
+			std::ios_base::openmode file_mode = std::ios::out | std::ios::binary | std::ios::trunc;
+			out_files[i] = new std::ofstream(outFile.str(), file_mode);
+			assert(out_files[i]);
+
+			if(noncesNumbers[i] % staggerSize != 0) {
+				noncesNumbers[i] -= noncesNumbers[i] % staggerSize;
+				noncesNumbers[i] += staggerSize;
+			}
+
+			endNonces[i] = startNonces[i] + noncesNumbers[i];
+			unsigned int noncesGbSize = noncesNumbers[i] / 4 / 1024;
+			std::cerr << "Path: " << paths[i] << std::endl;
+			std::cerr << "Nonces: " << startNonces[i] << " to " << endNonces[i] << " (" << noncesGbSize << " GB)" << std::endl;
+			std::cerr << "Creating CPU buffer" << std::endl;
+			buffersCpu[i] = new unsigned char[nonceSize];
+			if(!buffersCpu[i]) {
+				throw std::runtime_error("Unable to create the CPU buffer (probably out of host memory.)");
+			}
+			std::cerr << "----" << std::endl;
+			saving_thread_flags[i] = false;
+		}
+
+		cl_platform_id platforms[4];
+		cl_uint platformsNumber;
+		cl_device_id devices[32];
+		cl_uint devicesNumber;
+		cl_context context = 0;
+		cl_command_queue commandQueue = 0;
+		cl_mem bufferGpuGen = 0;
+		cl_mem bufferGpuScoops = 0;
+		cl_program program = 0;
+		cl_kernel kernelStep1 = 0;
+		cl_kernel kernelStep2 = 0;
+		cl_kernel kernelStep3 = 0;
+
 		int error;
 
 		std::cerr << "Retrieving OpenCL platforms" << std::endl;
@@ -172,13 +190,6 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		commandQueue = clCreateCommandQueue(context, devices[deviceId], 0, &error);
 		if(error != CL_SUCCESS) {
 			throw OpenclError(error, "Unable to create the OpenCL command queue");
-		}
-
-		std::cerr << "Creating CPU buffer" << std::endl;
-		unsigned int nonceSize = PLOT_SIZE * staggerSize;
-		bufferCpu = new unsigned char[nonceSize];
-		if(!bufferCpu) {
-			throw std::runtime_error("Unable to create the CPU buffer");
 		}
 
 		std::cerr << "Creating OpenCL GPU generation buffer" << std::endl;
@@ -223,7 +234,6 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		}
 
 		std::cerr << "Setting OpenCL step1 kernel static arguments" << std::endl;
-		error = clSetKernelArg(kernelStep1, 0, sizeof(cl_ulong), (void*)&address);
 		error = clSetKernelArg(kernelStep1, 2, sizeof(cl_mem), (void*)&bufferGpuGen);
 		if(error != CL_SUCCESS) {
 			throw OpenclError(error, "Unable to set the OpenCL kernel arguments");
@@ -258,68 +268,99 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		size_t globalWorkSize = staggerSize;
 		size_t localWorkSize = (staggerSize < threadsNumber) ? staggerSize : threadsNumber;
 		time_t startTime = time(0);
-		for(nonce = startNonce ; nonce < endNonce ; nonce += staggerSize) {
-			error = clSetKernelArg(kernelStep1, 1, sizeof(cl_ulong), (void*)&nonce);
-			if(error != CL_SUCCESS) {
-				throw OpenclError(error, "Unable to set the OpenCL step1 kernel arguments");
-			}
+		for (unsigned long long nonce_ordinal = 0; nonce_ordinal < maxNonceNumber; nonce_ordinal += staggerSize) {
+			for (unsigned int jobnum = 0; jobnum < paths.size(); jobnum += 1) {
+				unsigned long long nonce = startNonces[jobnum] + nonce_ordinal;
 
-			error = clEnqueueNDRangeKernel(commandQueue, kernelStep1, 1, 0, &globalWorkSize, &localWorkSize, 0, 0, 0);
-			if(error != CL_SUCCESS) {
-				throw OpenclError(error, "Error in step1 kernel launch");
-			}
-
-			unsigned int hashesSize = hashesNumber * HASH_SIZE;
-			for(int hashesOffset = PLOT_SIZE ; hashesOffset > 0 ; hashesOffset -= hashesSize) {
-				error = clSetKernelArg(kernelStep2, 0, sizeof(cl_ulong), (void*)&nonce);
-				error = clSetKernelArg(kernelStep2, 2, sizeof(cl_uint), (void*)&hashesOffset);
-				error = clSetKernelArg(kernelStep2, 3, sizeof(cl_uint), (void*)&hashesNumber);
+				// Is a cl_ulong always an unsigned long long?
+				error = clSetKernelArg(kernelStep1, 1, sizeof(cl_ulong), (void*)&nonce);
 				if(error != CL_SUCCESS) {
-					throw OpenclError(error, "Unable to set the OpenCL step2 kernel arguments");
+					throw OpenclError(error, "Unable to set the OpenCL step1 kernel arguments");
 				}
 
-				error = clEnqueueNDRangeKernel(commandQueue, kernelStep2, 1, 0, &globalWorkSize, &localWorkSize, 0, 0, 0);
+				error = clEnqueueNDRangeKernel(commandQueue, kernelStep1, 1, 0, &globalWorkSize, &localWorkSize, 0, 0, 0);
 				if(error != CL_SUCCESS) {
-					throw OpenclError(error, "Error in step2 kernel launch");
+					throw OpenclError(error, "Error in step1 kernel launch");
 				}
 
-				error = clFinish(commandQueue);
+				unsigned int hashesSize = hashesNumber * HASH_SIZE;
+				for(int hashesOffset = PLOT_SIZE ; hashesOffset > 0 ; hashesOffset -= hashesSize) {
+					error = clSetKernelArg(kernelStep1, 0, sizeof(cl_ulong), (void*)&addresses[jobnum]);
+					error = clSetKernelArg(kernelStep2, 0, sizeof(cl_ulong), (void*)&nonce);
+					error = clSetKernelArg(kernelStep2, 2, sizeof(cl_uint), (void*)&hashesOffset);
+					error = clSetKernelArg(kernelStep2, 3, sizeof(cl_uint), (void*)&hashesNumber);
+					if(error != CL_SUCCESS) {
+						throw OpenclError(error, "Unable to set the OpenCL step2 kernel arguments");
+					}
+
+					error = clEnqueueNDRangeKernel(commandQueue, kernelStep2, 1, 0, &globalWorkSize, &localWorkSize, 0, 0, 0);
+					if(error != CL_SUCCESS) {
+						throw OpenclError(error, "Error in step2 kernel launch");
+					}
+
+					error = clFinish(commandQueue);
+					if(error != CL_SUCCESS) {
+						throw OpenclError(error, "Error in step2 kernel finish");
+					}
+				}
+
+				double percent = 100.0 * (double)(nonce - startNonces[jobnum]) / (double)noncesNumbers[jobnum];
+				time_t currentTime = time(0);
+				double speed = (double)(nonce - startNonces[jobnum] + 1) / difftime(currentTime, startTime) * 60.0;
+				double estimatedTime = (double)(endNonces[jobnum] - nonce) / speed;
+				std::cerr << "\r" << percent << "% (" << (nonce - startNonces[jobnum]) << "/" << noncesNumbers[jobnum] << " nonces)";
+				std::cerr << ", " << speed << " nonces/minutes";
+				std::cerr << ", ETA: " << ((int)estimatedTime / 60) << "h" << ((int)estimatedTime % 60) << "m" << ((int)(estimatedTime * 60.0) % 60) << "s";
+				std::cerr << "...                    ";
+
+				error = clEnqueueNDRangeKernel(commandQueue, kernelStep3, 1, 0, &globalWorkSize, &localWorkSize, 0, 0, 0);
 				if(error != CL_SUCCESS) {
-					throw OpenclError(error, "Error in step2 kernel finish");
+					throw OpenclError(error, "Error in step3 kernel launch");
+				}
+
+				if (saving_thread_flags[jobnum]) {
+					save_threads[jobnum].wait(); // Wait for last job to finish
+					saving_thread_flags[jobnum] = false;
+				}
+
+				error = clEnqueueReadBuffer(commandQueue, bufferGpuScoops, CL_TRUE, 0, sizeof(cl_uchar) * nonceSize, buffersCpu[jobnum], 0, 0, 0);
+				if(error != CL_SUCCESS) {
+					throw OpenclError(error, "Error in synchronous read");
+				}
+				saving_thread_flags[jobnum] = true;
+				save_threads[jobnum] = std::async(save_nonces, nonceSize, out_files[jobnum], buffersCpu[jobnum]);
+			}
+
+			//Clean up
+			for (unsigned int i = 0; i < paths.size(); i += 1) {
+				if (saving_thread_flags[i]) {
+					std::cerr << "waiting for final save to " << paths[i] << " to finish" << std::endl;
+					save_threads[i].wait();
+					saving_thread_flags[i] = false;
+					std::cerr << "done waiting for final save" << std::endl;
+					if (buffersCpu[i]) {
+						delete[] buffersCpu[i];
+					}
+					if (out_files[i]) {
+						delete[] out_files[i];
+					}
 				}
 			}
 
-			double percent = 100.0 * (double)(nonce - startNonce) / (double)noncesNumber;
-			time_t currentTime = time(0);
-			double speed = (double)(nonce - startNonce + 1) / difftime(currentTime, startTime) * 60.0;
-			double estimatedTime = (double)(endNonce - nonce) / speed;
-			std::cerr << "\r" << percent << "% (" << (nonce - startNonce) << "/" << noncesNumber << " nonces)";
-			std::cerr << ", " << speed << " nonces/minutes";
-			std::cerr << ", ETA: " << ((int)estimatedTime / 60) << "h" << ((int)estimatedTime % 60) << "m" << ((int)(estimatedTime * 60.0) % 60) << "s";
-			std::cerr << "...                    ";
-
-			error = clEnqueueNDRangeKernel(commandQueue, kernelStep3, 1, 0, &globalWorkSize, &localWorkSize, 0, 0, 0);
-			if(error != CL_SUCCESS) {
-				throw OpenclError(error, "Error in step3 kernel launch");
-			}
-
-			if (saving_thread) {
-			  save_thread.wait(); // Wait for last job to finish
-			  saving_thread = false;
-			}
-
-			error = clEnqueueReadBuffer(commandQueue, bufferGpuScoops, CL_TRUE, 0, sizeof(cl_uchar) * nonceSize, bufferCpu, 0, 0, 0);
-			if(error != CL_SUCCESS) {
-			  throw OpenclError(error, "Error in synchronous read");
-			}
-			saving_thread = true;
-			save_thread = std::async(save_nonces, nonceSize, out, bufferCpu);
+			if(kernelStep3) { clReleaseKernel(kernelStep3); }
+			if(kernelStep2) { clReleaseKernel(kernelStep2); }
+			if(kernelStep1) { clReleaseKernel(kernelStep1); }
+			if(program) { clReleaseProgram(program); }
+			if(bufferGpuGen) { clReleaseMemObject(bufferGpuGen); }
+			if(bufferGpuScoops) { clReleaseMemObject(bufferGpuScoops); }
+			if(commandQueue) { clReleaseCommandQueue(commandQueue); }
+			if(context) { clReleaseContext(context); }
 		}
 
 		time_t currentTime = time(0);
 		double elapsedTime = difftime(currentTime, startTime) / 60.0;
-		double speed = (double)noncesNumber / elapsedTime;
-		std::cerr << "\r100% (" << noncesNumber << "/" << noncesNumber << " nonces)";
+		double speed = (double)totalNonces / elapsedTime;
+		std::cerr << "\r100% (" << totalNonces << "/" << totalNonces << " nonces)";
 		std::cerr << ", " << speed << " nonces/minutes";
 		std::cerr << ", " << ((int)elapsedTime / 60) << "h" << ((int)elapsedTime % 60) << "m" << ((int)(elapsedTime * 60.0) % 60) << "s";
 		std::cerr << "                    " << std::endl;
@@ -330,24 +371,6 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		std::cerr << "[ERROR] " << ex.what() << std::endl;
 		returnCode = -1;
 	}
-
-	if (saving_thread) {
-	  std::cerr << "waiting for final save to finish" << std::endl;
-	  save_thread.wait();
-	  saving_thread = false;
-	  std::cerr << "done waiting for final save" << std::endl;
-	}
-
-	if(kernelStep3) { clReleaseKernel(kernelStep3); }
-	if(kernelStep2) { clReleaseKernel(kernelStep2); }
-	if(kernelStep1) { clReleaseKernel(kernelStep1); }
-	if(program) { clReleaseProgram(program); }
-	if(bufferGpuGen) { clReleaseMemObject(bufferGpuGen); }
-	if(bufferGpuScoops) { clReleaseMemObject(bufferGpuScoops); }
-	if(bufferCpu) { delete[] bufferCpu; }
-	if(commandQueue) { clReleaseCommandQueue(commandQueue); }
-	if(context) { clReleaseContext(context); }
-	delete out;
 	return returnCode;
 }
 
