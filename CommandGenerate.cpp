@@ -43,16 +43,23 @@ CommandGenerate::~CommandGenerate() throw () {
 }
 
 void CommandGenerate::help() const {
-	std::cerr << "Usage: ./gpuPlotGenerator generate <platformId> <deviceId> <path> <address> <startNonce> <noncesNumber> <staggerSize> <threadsNumber> <hashesNumber>" << std::endl;
+	std::cerr << "Usage: ./gpuPlotGenerator generate ";
+	std::cerr << "<platformId> <deviceId> <staggerSize> <threadsNumber> ";
+	std::cerr << "<hashesNumber> <path> <address> <startNonce> <noncesNumber> ";
+	std::cerr << "[<path> <address> <startNonce> <noncesNumber> ...]" << std::endl;
 	std::cerr << "    - platformId: Id of the OpenCL platform to use (see [list] command)." << std::endl;
 	std::cerr << "    - deviceId: Id of the OpenCL device to use (see [list] command)." << std::endl;
+	std::cerr << "    - staggerSize: Stagger size." << std::endl;
+	std::cerr << "    - threadsNumber: Number of parallel threads for each work group." << std::endl;
+	std::cerr << "    - hashesNumber: Number of hashes to compute for each step2 kernel calls." << std::endl;
 	std::cerr << "    - path: Path to the plots directory." << std::endl;
 	std::cerr << "    - address: Burst numerical address." << std::endl;
 	std::cerr << "    - startNonce: First nonce of the plot generation." << std::endl;
 	std::cerr << "    - noncesNumber: Number of nonces to generate." << std::endl;
-	std::cerr << "    - staggerSize: Stagger size." << std::endl;
-	std::cerr << "    - threadsNumber: Number of parallel threads for each work group." << std::endl;
-	std::cerr << "    - hashesNumber: Number of hashes to compute for each step2 kernel calls." << std::endl;
+	std::cerr << "With multiple [<path> <address> <startNonce> <noncesNumber>] arguments " << std::endl;
+	std::cerr << "GPU calculation iterates through a stagger for each job the results are " << std::endl;
+	std::cerr << "saved asynchronously.  This is intended to be used for plotting multiple " << std::endl;
+	std::cerr << "mechanical drives simultaneously in order to max out GPU bandwidth." << std::endl;
 }
 
 void save_nonces(unsigned int nonceSize, std::ofstream *out, unsigned char *bufferCpu) {
