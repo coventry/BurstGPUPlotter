@@ -85,13 +85,22 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 	std::ofstream *out;
 	unsigned int platformId = atol(p_args[1].c_str());
 	unsigned int deviceId = atol(p_args[2].c_str());
-	std::string path(p_args[3]);
-	unsigned long long address = strtoull(p_args[4].c_str(), 0, 10);
-	unsigned long long startNonce = strtoull(p_args[5].c_str(), 0, 10);
-	unsigned int noncesNumber = atol(p_args[6].c_str());
-	unsigned int staggerSize = atol(p_args[7].c_str());
-	unsigned int threadsNumber = atol(p_args[8].c_str());
-	unsigned int hashesNumber = atol(p_args[9].c_str());
+	unsigned int staggerSize = atol(p_args[3].c_str());
+	unsigned int threadsNumber = atol(p_args[4].c_str());
+	unsigned int hashesNumber = atol(p_args[5].c_str());
+
+	unsigned int numbjobs = (p_args.size() - 5)/4;
+	std::vector<std::string> paths(numbjobs);
+	std::vector<unsigned long long> addresses(numbjobs);
+	std::vector<unsigned long long> startNonce(numbjobs);
+	std::vector<unsigned int> noncesNumber(numbjobs);
+	for (i = 0; i < numbjobs; i++) {
+	  int argstart = 5 + i*4;
+	  paths[i] = std::string(p_args[argstart]);
+	  addresses[i] = strtoull(p_args[argstart+1], NULL, 10);
+	  startNonce[i] = strtoull(p_args[argstart+2], NULL, 10);
+	  noncesNumber[i] = atol(p_args[argstart+3]);
+	}
 
 	std::ostringstream outFile;
 	outFile << path << "/" << address << "_" << startNonce << "_" << noncesNumber << "_" << staggerSize;
