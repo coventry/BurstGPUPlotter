@@ -268,6 +268,7 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		size_t globalWorkSize = staggerSize;
 		size_t localWorkSize = (staggerSize < threadsNumber) ? staggerSize : threadsNumber;
 		time_t startTime = time(0);
+		unsigned int totalNoncesCompleted = 0;
 		for (unsigned long long nonce_ordinal = 0; nonce_ordinal < maxNonceNumber; nonce_ordinal += staggerSize) {
 			for (unsigned int jobnum = 0; jobnum < paths.size(); jobnum += 1) {
 				unsigned long long nonce = startNonces[jobnum] + nonce_ordinal;
@@ -304,11 +305,12 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 					}
 				}
 
-				double percent = 100.0 * (double)(nonce - startNonces[jobnum]) / (double)noncesNumbers[jobnum];
+				totalNoncesCompleted += staggerSize;
+				double percent = 100.0 * (double)totalNoncesCompleted / totalNonces;
 				time_t currentTime = time(0);
-				double speed = (double)(nonce - startNonces[jobnum] + 1) / difftime(currentTime, startTime) * 60.0;
-				double estimatedTime = (double)(endNonces[jobnum] - nonce) / speed;
-				std::cerr << "\r" << percent << "% (" << (nonce - startNonces[jobnum]) << "/" << noncesNumbers[jobnum] << " nonces)";
+				double speed = (double)totalNoncesCompleted / difftime(currentTime, startTime) * 60.0;
+				double estimatedTime = (double)(totalNonces - totalNoncesCompleted) / speed;
+				std::cerr << "\r" << percent << "% (" << totalNoncesCompleted << "/" << totalNonces << " nonces)";
 				std::cerr << ", " << speed << " nonces/minutes";
 				std::cerr << ", ETA: " << ((int)estimatedTime / 60) << "h" << ((int)estimatedTime % 60) << "m" << ((int)(estimatedTime * 60.0) % 60) << "s";
 				std::cerr << "...                    ";
