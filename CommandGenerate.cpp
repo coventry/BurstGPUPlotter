@@ -276,6 +276,11 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 
 				std::cout << "Running with start nonce " << nonce << std::endl;
 				// Is a cl_ulong always an unsigned long long?
+				unsigned int error = 0;
+				error = clSetKernelArg(kernelStep1, 0, sizeof(cl_ulong), (void*)&addresses[jobnum]);
+				if(error != CL_SUCCESS) {
+					throw OpenclError(error, "Unable to set the OpenCL step1 kernel arguments");
+				}
 				error = clSetKernelArg(kernelStep1, 1, sizeof(cl_ulong), (void*)&nonce);
 				if(error != CL_SUCCESS) {
 					throw OpenclError(error, "Unable to set the OpenCL step1 kernel arguments");
@@ -288,7 +293,6 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 
 				unsigned int hashesSize = hashesNumber * HASH_SIZE;
 				for(int hashesOffset = PLOT_SIZE ; hashesOffset > 0 ; hashesOffset -= hashesSize) {
-					error = clSetKernelArg(kernelStep1, 0, sizeof(cl_ulong), (void*)&addresses[jobnum]);
 					error = clSetKernelArg(kernelStep2, 0, sizeof(cl_ulong), (void*)&nonce);
 					error = clSetKernelArg(kernelStep2, 2, sizeof(cl_uint), (void*)&hashesOffset);
 					error = clSetKernelArg(kernelStep2, 3, sizeof(cl_uint), (void*)&hashesNumber);
