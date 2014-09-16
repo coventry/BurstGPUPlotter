@@ -111,6 +111,7 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 
 	try {
 		for (unsigned int i = 0; i < numjobs; i++) {
+			std::cerr << "----" << std::endl;
 			std::cerr << "Job number " << i << std::endl;
 			unsigned int argstart = 5 + i*4;
 			paths[i] = std::string(p_args[argstart]);
