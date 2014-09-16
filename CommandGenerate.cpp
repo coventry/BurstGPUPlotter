@@ -273,6 +273,9 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		for (unsigned long long nonce_ordinal = 0; nonce_ordinal < maxNonceNumber; nonce_ordinal += staggerSize) {
 			for (unsigned int jobnum = 0; jobnum < paths.size(); jobnum += 1) {
 				unsigned long long nonce = startNonces[jobnum] + nonce_ordinal;
+				if (nonce > endNonces[jobnum]) {
+				  break;
+				}
 
 				std::cout << "Running with start nonce " << nonce << std::endl;
 				// Is a cl_ulong always an unsigned long long?
