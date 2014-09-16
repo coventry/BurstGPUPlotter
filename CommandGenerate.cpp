@@ -338,32 +338,30 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 				saving_thread_flags[jobnum] = true;
 				save_threads[jobnum] = std::async(save_nonces, nonceSize, out_files[jobnum], buffersCpu[jobnum]);
 			}
-
-			//Clean up
-			for (unsigned int i = 0; i < paths.size(); i += 1) {
-				if (saving_thread_flags[i]) {
-					std::cerr << "waiting for final save to " << paths[i] << " to finish" << std::endl;
-					save_threads[i].wait();
-					saving_thread_flags[i] = false;
-					std::cerr << "done waiting for final save" << std::endl;
-					if (buffersCpu[i]) {
-						delete[] buffersCpu[i];
-					}
-					if (out_files[i]) {
-						delete[] out_files[i];
-					}
-				}
-			}
-
-			if(kernelStep3) { clReleaseKernel(kernelStep3); }
-			if(kernelStep2) { clReleaseKernel(kernelStep2); }
-			if(kernelStep1) { clReleaseKernel(kernelStep1); }
-			if(program) { clReleaseProgram(program); }
-			if(bufferGpuGen) { clReleaseMemObject(bufferGpuGen); }
-			if(bufferGpuScoops) { clReleaseMemObject(bufferGpuScoops); }
-			if(commandQueue) { clReleaseCommandQueue(commandQueue); }
-			if(context) { clReleaseContext(context); }
 		}
+
+		//Clean up
+		for (unsigned int i = 0; i < paths.size(); i += 1) {
+		  if (saving_thread_flags[i]) {
+		    std::cerr << "waiting for final save to " << paths[i] << " to finish" << std::endl;
+		    save_threads[i].wait();
+		    saving_thread_flags[i] = false;
+		    std::cerr << "done waiting for final save" << std::endl;
+		    if (buffersCpu[i]) {
+		      delete[] buffersCpu[i];
+		    }
+		  }
+		}
+		
+		if(kernelStep3) { clReleaseKernel(kernelStep3); }
+		if(kernelStep2) { clReleaseKernel(kernelStep2); }
+		if(kernelStep1) { clReleaseKernel(kernelStep1); }
+		if(program) { clReleaseProgram(program); }
+		if(bufferGpuGen) { clReleaseMemObject(bufferGpuGen); }
+		if(bufferGpuScoops) { clReleaseMemObject(bufferGpuScoops); }
+		if(commandQueue) { clReleaseCommandQueue(commandQueue); }
+		if(context) { clReleaseContext(context); }
+
 
 		time_t currentTime = time(0);
 		double elapsedTime = difftime(currentTime, startTime) / 60.0;
