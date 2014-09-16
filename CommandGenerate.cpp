@@ -274,6 +274,7 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 			for (unsigned int jobnum = 0; jobnum < paths.size(); jobnum += 1) {
 				unsigned long long nonce = startNonces[jobnum] + nonce_ordinal;
 
+				std::cout << "Running with start nonce " << nonce << std::endl;
 				// Is a cl_ulong always an unsigned long long?
 				error = clSetKernelArg(kernelStep1, 1, sizeof(cl_ulong), (void*)&nonce);
 				if(error != CL_SUCCESS) {
