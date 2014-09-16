@@ -113,7 +113,7 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 		for (unsigned int i = 0; i < numjobs; i++) {
 			std::cerr << "----" << std::endl;
 			std::cerr << "Job number " << i << std::endl;
-			unsigned int argstart = 5 + i*4;
+			unsigned int argstart = 6 + i*4;
 			paths[i] = std::string(p_args[argstart]);
 			addresses[i] = strtoull(p_args[argstart+1].c_str(), NULL, 10);
 			startNonces[i] = strtoull(p_args[argstart+2].c_str(), NULL, 10);
