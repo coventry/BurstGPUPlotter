@@ -134,7 +134,7 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 
 			endNonces[i] = startNonces[i] + noncesNumbers[i];
 			unsigned int noncesGbSize = noncesNumbers[i] / 4 / 1024;
-			std::cerr << "Path: " << paths[i] << std::endl;
+			std::cerr << "Path: " << outFile.str() << std::endl;
 			std::cerr << "Nonces: " << startNonces[i] << " to " << endNonces[i] << " (" << noncesGbSize << " GB)" << std::endl;
 			std::cerr << "Creating CPU buffer" << std::endl;
 			buffersCpu[i] = new unsigned char[nonceSize];
