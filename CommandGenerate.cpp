@@ -141,8 +141,8 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 			if(!buffersCpu[i]) {
 				throw std::runtime_error("Unable to create the CPU buffer (probably out of host memory.)");
 			}
-			std::cerr << "----" << std::endl;
 			saving_thread_flags[i] = false;
+			std::cerr << "----" << std::endl;
 		}
 
 		cl_platform_id platforms[4];
