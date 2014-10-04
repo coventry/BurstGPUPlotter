@@ -339,7 +339,7 @@ int CommandGenerate::execute(const std::vector<std::string>& p_args) {
 					throw OpenclError(error, "Error in synchronous read");
 				}
 				saving_thread_flags[jobnum] = true;
-				save_threads[jobnum] = std::async(save_nonces, nonceSize, out_files[jobnum], buffersCpu[jobnum]);
+				save_threads[jobnum] = std::async(std::launch::async, save_nonces, nonceSize, out_files[jobnum], buffersCpu[jobnum]);
 			}
 		}
 
