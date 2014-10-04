@@ -1,0 +1,79 @@
+-----------
+DESCRIPTION
+-----------
+GPU plot generator for Burst coin.
+Author: Cryo
+Bitcoin: 138gMBhCrNkbaiTCmUhP9HLU9xwn5QKZgD
+Burst: BURST-YA29-QCEW-QXC3-BKXDL
+
+Based on the code of the official miner and dcct's plotgen.
+
+If you like this software, support me ;)
+
+-----------------------
+HOW TO BUILD ON WINDOWS
+-----------------------
+Install msys/mingw.
+Install OpenCL (available in the manufacturer SDKs) or find the include/lib files on your hard drive (some drivers include those files).
+
+Modify the [OPENCL_INCLUDE] and [OPENCL_LIB] variables of the Makefile to the correct path.
+
+cd <this directory>
+make dist
+
+The [bin] folder contains all the necessary files to launch the GPU plotter.
+
+---------------------
+HOW TO BUILD ON LINUX
+---------------------
+Install the build-essential and g++ packets.
+Install OpenCL.
+
+Modify the [OPENCL_INCLUDE] and [OPENCL_LIB] variables of the Makefile to the correct path.
+
+cd <this directory>
+make dist
+
+The [bin] folder contains all the necessary files to launch the GPU plotter.
+
+----------
+HOW TO USE
+----------
+Display a full help message: ./gpuPlotGenerator
+Display a per-command help message: ./gpuPlotGenerator help <command>
+----
+List the OpenCL platforms: ./gpuPlotGenerator list platforms
+Choose your platform
+List the devices bound to this platform : ./gpuPlotGenerator list devices <platformId>
+Choose your device
+Generate the plots with the selected platform/device pair : ./gpuPlotGenerator generate <platformId> <deviceId> ...
+
+------------------
+PERFORMANCE ISSUES
+------------------
+There is two available modes:
+  - One graphic card
+  - Multiple graphic cards (preferred way)
+
+--
+One graphic card
+--
+Facts:
+  - The graphic card is bound to your display drawing loop.
+  - When launched, an OpenCL kernel uses all the GPU resources.
+  - To avoid screen freezes, the display driver kills every hanging kernel after a defined period (around 5 seconds most of the time).
+
+So, the plot generation has to be split in smaller chunks to avoid being killed.
+The chunks size are expressed in number of hashes (<hashesNumber> parameter). It ranges from 1 to 8160 (PLOT_SIZE / HASH_SIZE - HASH_SIZE).
+Try with a low number and go up as far as you can.
+
+Warning: As the plot generation runs at the same time as your display renders, you may experience some freezes or repetitive lack of responsiveness.
+
+--
+Multiple graphic cards (preferred way)
+--
+In this mode, all the non-bound graphic cards can be used to generate plots without any timeout issue.
+The typical <hashesNumber> parameter will be 8160.
+
+To generate multiple plots at the same time, just launch multiple processes on different cards.
+Each process will still requires a certain amount of RAM on the CPU side.
